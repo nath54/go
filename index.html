@@ -92,6 +92,7 @@
     var joueur_encour = 1; // 1 = noir, 2 = blanc
     var passes = 0; // nombres de passes d'affilés
     var coups = [];
+    var ko_encours = null;
 
     function passe() {
         passes++;
@@ -101,8 +102,6 @@
     }
 
     function undo() {
-        alert("Fonction pas prête");
-        return;
         if (coups.length == 0) {
             alert("Aucuns coups n'a été joué");
             return;
@@ -110,15 +109,36 @@
         var coup = coups[coups.length - 1];
         var x = coup[0];
         var y = coup[1];
+        var captur = coup[2]; // Pierres par capturées par le coup
+        ko_encours = coup[3];
         coups = coups.slice(0, -1);
+        // On enlève la pierre du plateau visuel
         var pierre = document.getElementById("pierre_" + x + "_" + y);
         pierre.parentElement.removeChild(pierre);
+        // On enlève la pierre du plateau
         plateau_encours[y][x] = 0;
+        // On va remettre les pierres capturées
+        for (c of captur) {
+            // Dans le plateau
+            plateau_encours[c[1]][c[0]] = joueur_encour;
+            // Dans le plateau visuel
+            var pierre = document.createElement("figure");
+            pierre.classList.add("pierre");
+            pierre.setAttribute("id", "pierre_" + c[0] + "_" + c[1]);
+            if (joueur_encour == 1) {
+                pierre.classList.add("pierre_noire");
+            } else {
+                pierre.classList.add("pierre_blanche");
+            }
+            document.getElementById("case_" + c[0] + "_" + c[1]).appendChild(pierre);
+        }
+        // On change de joueurs
         if (joueur_encour == 1) {
             joueur_encour = 2;
         } else {
             joueur_encour = 1;
         }
+
     }
 
     function fin_partie() {
@@ -149,7 +169,12 @@
         }
     }
 
-    function get_pierres_voisines(px, py, interdit = 0) {
+    function get_pierres_voisines(px, py, interdit = 0, plat = null) {
+        if (plat == null) {
+            var plateau = plateau_encours;
+        } else {
+            var plateau = plat;
+        }
         var pierres_voisines = [];
         for ([dx, dy] of[[0, -1], [0, 1], [-1, 0], [1, 0]]) {
             var x = px + dx;
@@ -180,14 +205,19 @@
     }
 
     // mettre interdit à -1 si
-    function get_figure(px, py, interdit = 0) {
+    function get_figure(px, py, interdit = 0, plat = null) {
+        if (plat == null) {
+            var plateau = plateau_encours;
+        } else {
+            var plateau = plat;
+        }
         // On teste s'il y a bien une pierre a cet endroit
         if (px >= 0 && py >= 0 &&
             px < taille_horizontale_encours && py < taille_verticale_encours && plateau_encours[py][px] == interdit) {
             return [];
         }
         // On récupère la figure
-        var j = plateau_encours[py][px];
+        var j = plateau[py][px];
         var figure = [{
             "joueur": j,
             "x": px,
@@ -203,7 +233,7 @@
             piece_actu = a_tester[0];
             a_tester = a_tester.slice(1, a_tester.length);
             // On parcours ses voisines
-            for (voisin of get_pierres_voisines(piece_actu.x, piece_actu.y, interdit)) {
+            for (voisin of get_pierres_voisines(piece_actu.x, piece_actu.y, interdit, plateau)) {
                 if (voisin.joueur == piece_actu.joueur && !pierre_dans_liste(voisin, a_tester) && !pierre_dans_liste(voisin, figure)) {
                     a_tester.push(voisin);
                     figure.push(voisin);
@@ -214,7 +244,12 @@
     }
 
     // Fonction qui calcule les libertés de la figure contenant la pierre (px, py)
-    function calcule_libertes(px = 0, py = 0, figure = null) {
+    function calcule_libertes(px = 0, py = 0, figure = null, plat = null) {
+        if (plat == null) {
+            var plateau = plateau_encours;
+        } else {
+            plateau = plat;
+        }
         var figure = figure;
         if (figure == null) {
             // On teste s'il y a bien une pierre a cet endroit
@@ -223,7 +258,7 @@
                 return 0;
             }
             // On récupère la figure
-            figure = get_figure(px, py);
+            figure = get_figure(px, py, 0, plateau);
         }
         // On va tester les libertes
         var libertes = [];
@@ -236,7 +271,7 @@
                 if (x >= 0 && x < taille_horizontale_encours &&
                     y >= 0 && y < taille_verticale_encours &&
                     (xx != x || yy != y)) {
-                    if (plateau_encours[y][x] == 0 && !pierre_dans_liste({
+                    if (plateau[y][x] == 0 && !pierre_dans_liste({
                             "x": x,
                             "y": y
                         }, libertes)) {
@@ -259,6 +294,11 @@
         }
         for (pierre of document.getElementsByClassName("pierre_hover_blanche")) {
             pierre.parentElement.removeChild(pierre);
+        }
+        // On teste si le coup est interdit à cause du ko
+        if (ko_encours != null && ko_encours[0] == x && ko_encours[1] == y) {
+            alert("Il y a un ko à cet endroit !");
+            return;
         }
         // On vérifie qu'il n'y a pas déjà de pierres
         if (plateau_encours[y][x] == 0) {
@@ -312,7 +352,7 @@
             // c'est bon, on peut jouer
             plateau_encours[y][x] = joueur_encour;
             passes = 0;
-            coups.push([x, y]);
+            var capture_coup = [];
 
             // On teste s'il capture d'autres_pieces
 
@@ -323,6 +363,7 @@
                     if (calcule_libertes(0, 0, figure) == 0) {
                         // Il capture la figure
                         for (pierre of figure) {
+                            capture_coup.push([pierre.x, pierre.y]);
                             var p = document.getElementById("pierre_" + pierre.x + "_" + pierre.y);
                             p.parentElement.removeChild(p);
                             plateau_encours[pierre.y][pierre.x] = 0;
@@ -331,6 +372,18 @@
                     }
                 }
             }
+
+            // On teste le ko
+
+            // le ko ne marche qu'avec qu'une pierre capturée
+            if (capture_coup.length == 1) {
+                //TODO
+
+            }
+
+
+            // On enregistre le coup
+            coups.push([x, y, capture_coup, ko_encours]);
 
             // on change le joueur
             if (joueur_encour == 1) {
