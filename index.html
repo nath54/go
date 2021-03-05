@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>go</title>
+    <link href="css/style.css" rel="stylesheet" />
+</head>
+
+<body onload="nouvelle_partie();">
+
+    <div class="header">
+
+        <div class="row">
+            <div class="column">
+                <div>
+                    <h1 class="el_h">Go</h1>
+                </div>
+            </div>
+            <div class="column">
+                <div class="el_h">
+                    <label>Taille horizontale du plateau</label>
+                    <input id="tx" type="number" min=2 max=30 value=19 />
+                </div>
+                <div class="el_h">
+                    <label>Taille verticale du plateau</label>
+                    <input id="ty" type="number" min=2 max=30 value=19 />
+                </div>
+            </div>
+            <div class="column">
+                <div class="el_h">
+                    <label>Joueur noir</label>
+                    <select id="joueur_noir">
+                        <option selected>humain</option>
+                    </select>
+                </div>
+                <div class="el_h">
+                    <label>Joueur blanc</label>
+                    <select id="joueur_blanc">
+                        <option selected>humain</option>
+                    </select>
+                </div>
+            </div>
+            <div class="column">
+                <div class="el_h">
+                    <button class="el_h" onclick="nouvelle_partie();">Jouer</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row">
+
+        <div id="plateau_viewer">
+            <table id="plateau"></table>
+        </div>
+
+        <div class="column cote">
+            <div class="row">
+                <button onclick="passer();">passer</button>
+                <button onclick="undo();">annuler</button>
+            </div>
+            <div style="color: white;">
+                <h1>TODO:</h1>
+                <ul>
+                    <li>Finir la partie</li>
+                    <li>Gérer les kos</li>
+                    <li>Boutons pour zoomer/dézoomer sur le plateau</li>
+                    <li>Bruits à chaque coup</li>
+                    <li>Bots en adversaires</li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+
+</html>
+
+<script>
+    var plateau_encours = null; // la matrice des pierres
+    // 0 = case vide
+    // 1 = noir
+    // 2 = blanc
+    var taille_horizontale_encours = null; // tx
+    var taille_verticale_encours = null; // ty
+    var joueur_1 = null; // noir
+    var joueur_2 = null; // blanc
+    var captures = [0, 0]; // pierres capturees
+    var joueur_encour = 1; // 1 = noir, 2 = blanc
+    var passes = 0; // nombres de passes d'affilés
+    var coups = [];
+
+    function passe() {
+        passes++;
+        if (passes == 2) {
+            fin_partie();
+        }
+    }
+
+    function undo() {
+        alert("Fonction pas prête");
+        return;
+        if (coups.length == 0) {
+            alert("Aucuns coups n'a été joué");
+            return;
+        }
+        var coup = coups[coups.length - 1];
+        var x = coup[0];
+        var y = coup[1];
+        coups = coups.slice(0, -1);
+        var pierre = document.getElementById("pierre_" + x + "_" + y);
+        pierre.parentElement.removeChild(pierre);
+        plateau_encours[y][x] = 0;
+        if (joueur_encour == 1) {
+            joueur_encour = 2;
+        } else {
+            joueur_encour = 1;
+        }
+    }
+
+    function fin_partie() {
+
+    }
+
+    function enter_hover(x, y) {
+        // On vérifie qu'il n'y a pas déjà de pierres
+        if (plateau_encours[y][x] == 0) {
+            // on place la pierre sur le plateau
+            var pierre = document.createElement("figure");
+            pierre.classList.add("pierre");
+            pierre.setAttribute("id", "pierre_hover_" + x + "_" + y);
+            if (joueur_encour == 1) {
+                pierre.classList.add("pierre_hover_noire");
+            } else {
+                pierre.classList.add("pierre_hover_blanche");
+            }
+            document.getElementById("case_" + x + "_" + y).appendChild(pierre);
+        }
+    }
+
+    function exit_hover(x, y) {
+        // On vérifie qu'il n'y a pas déjà de pierres
+        if (plateau_encours[y][x] == 0) {
+            var pierre = document.getElementById("pierre_hover_" + x + "_" + y);
+            pierre.parentElement.removeChild(pierre);
+        }
+    }
+
+    function get_pierres_voisines(px, py, interdit = 0) {
+        var pierres_voisines = [];
+        for ([dx, dy] of[[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+            var x = px + dx;
+            var y = py + dy;
+            if (x >= 0 && x < taille_horizontale_encours &&
+                y >= 0 && y < taille_verticale_encours &&
+                (px != x || py != y)) {
+                if (plateau_encours[y][x] != interdit) {
+                    pierres_voisines.push({
+                        "joueur": plateau_encours[y][x],
+                        "x": x,
+                        "y": y
+                    });
+                }
+            }
+
+        }
+        return pierres_voisines;
+    }
+
+    function pierre_dans_liste(pierre, liste_pierres) {
+        for (autre_pierre of liste_pierres) {
+            if (autre_pierre.x == pierre.x && autre_pierre.y == pierre.y) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // mettre interdit à -1 si
+    function get_figure(px, py, interdit = 0) {
+        // On teste s'il y a bien une pierre a cet endroit
+        if (px >= 0 && py >= 0 &&
+            px < taille_horizontale_encours && py < taille_verticale_encours && plateau_encours[py][px] == interdit) {
+            return [];
+        }
+        // On récupère la figure
+        var j = plateau_encours[py][px];
+        var figure = [{
+            "joueur": j,
+            "x": px,
+            "y": py
+        }]
+        var a_tester = [{
+            "joueur": j,
+            "x": px,
+            "y": py
+        }];
+        while (a_tester.length > 0) {
+            // On récupère la piece à tester
+            piece_actu = a_tester[0];
+            a_tester = a_tester.slice(1, a_tester.length);
+            // On parcours ses voisines
+            for (voisin of get_pierres_voisines(piece_actu.x, piece_actu.y, interdit)) {
+                if (voisin.joueur == piece_actu.joueur && !pierre_dans_liste(voisin, a_tester) && !pierre_dans_liste(voisin, figure)) {
+                    a_tester.push(voisin);
+                    figure.push(voisin);
+                }
+            }
+        }
+        return figure;
+    }
+
+    // Fonction qui calcule les libertés de la figure contenant la pierre (px, py)
+    function calcule_libertes(px = 0, py = 0, figure = null) {
+        var figure = figure;
+        if (figure == null) {
+            // On teste s'il y a bien une pierre a cet endroit
+            if (px >= 0 && py >= 0 &&
+                px < taille_horizontale_encours && py < taille_verticale_encours && [y][x] == 0) {
+                return 0;
+            }
+            // On récupère la figure
+            figure = get_figure(px, py);
+        }
+        // On va tester les libertes
+        var libertes = [];
+        for (piece of figure) {
+            var xx = piece.x;
+            var yy = piece.y;
+            for ([dx, dy] of[[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+                var x = xx + dx;
+                var y = yy + dy;
+                if (x >= 0 && x < taille_horizontale_encours &&
+                    y >= 0 && y < taille_verticale_encours &&
+                    (xx != x || yy != y)) {
+                    if (plateau_encours[y][x] == 0 && !pierre_dans_liste({
+                            "x": x,
+                            "y": y
+                        }, libertes)) {
+                        libertes.push({
+                            "x": x,
+                            "y": y
+                        });
+                    }
+                }
+
+            }
+        }
+        return libertes.length;
+    }
+
+    function coup(x, y, bot = false) {
+        // On enlève tous les hovers
+        for (pierre of document.getElementsByClassName("pierre_hover_noire")) {
+            pierre.parentElement.removeChild(pierre);
+        }
+        for (pierre of document.getElementsByClassName("pierre_hover_blanche")) {
+            pierre.parentElement.removeChild(pierre);
+        }
+        // On vérifie qu'il n'y a pas déjà de pierres
+        if (plateau_encours[y][x] == 0) {
+            // il faudra vérifier s'il prend des pierres
+            // ou s'il ne peut pas jouer a cause du coup suicide
+
+            // test coup suicide :
+
+            plateau_encours[y][x] = joueur_encour;
+            var coup_suicide = calcule_libertes(x, y) == 0;
+            plateau_encours[y][x] = 0;
+            if (coup_suicide) {
+                // On teste s'il peut prendre les pierres
+                var peutpas = true;
+                //
+                plateau_encours[y][x] = joueur_encour;
+                for ([dx, dy] of[[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+                    var xx = x + dx;
+                    var yy = y + dy;
+                    if (xx >= 0 && xx < taille_horizontale_encours &&
+                        yy >= 0 && yy < taille_verticale_encours &&
+                        (xx != x || yy != y) &&
+                        plateau_encours[yy][xx] != 0 && plateau_encours[yy][xx] != joueur_encour) {
+                        var fig = get_figure(xx, yy);
+                        if (calcule_libertes(0, 0, fig) == 0) {
+                            peutpas = false;
+                            break;
+                        }
+                    }
+                }
+                plateau_encours[y][x] = 0;
+                //
+                if (peutpas) {
+                    alert("Vous ne pouvez pas jouer ce coup, coup suicide !");
+                    return;
+                }
+
+            }
+
+            // on place la pierre sur le plateau
+            var pierre = document.createElement("figure");
+            pierre.classList.add("pierre");
+            pierre.setAttribute("id", "pierre_" + x + "_" + y);
+            if (joueur_encour == 1) {
+                pierre.classList.add("pierre_noire");
+            } else {
+                pierre.classList.add("pierre_blanche");
+            }
+            document.getElementById("case_" + x + "_" + y).appendChild(pierre);
+
+            // c'est bon, on peut jouer
+            plateau_encours[y][x] = joueur_encour;
+            passes = 0;
+            coups.push([x, y]);
+
+            // On teste s'il capture d'autres_pieces
+
+            for (voisin of get_pierres_voisines(x, y)) {
+                if (voisin.joueur != joueur_encour) {
+                    // Il touche une pierre voisine
+                    var figure = get_figure(voisin.x, voisin.y);
+                    if (calcule_libertes(0, 0, figure) == 0) {
+                        // Il capture la figure
+                        for (pierre of figure) {
+                            var p = document.getElementById("pierre_" + pierre.x + "_" + pierre.y);
+                            p.parentElement.removeChild(p);
+                            plateau_encours[pierre.y][pierre.x] = 0;
+                            captures[joueur_encour - 1]++;
+                        }
+                    }
+                }
+            }
+
+            // on change le joueur
+            if (joueur_encour == 1) {
+                joueur_encour = 2;
+            } else {
+                joueur_encour = 1;
+            }
+
+        } else {
+            alert("Il y a déjà une pierre à cet endroit !")
+            return;
+        }
+    }
+
+    function nettoie_plateau() {
+        var plateau = document.getElementById("plateau");
+        plateau.innerHTML = "";
+
+    }
+
+    function cree_plateau() {
+        if (plateau_encours != null) {
+            nettoie_plateau();
+        }
+        //
+        taille_horizontale_encours = parseInt(document.getElementById("tx").value);
+        taille_verticale_encours = parseInt(document.getElementById("ty").value);
+        //
+        //
+        plateau_encours = [];
+        for (y = 0; y < taille_verticale_encours; y++) {
+            plateau_encours.push([]);
+            for (x = 0; x < taille_horizontale_encours; x++) {
+                plateau_encours[y].push(0); // 0 = case vide
+            }
+        }
+        // Etoiles :
+        var etoiles = {
+            "19, 19": [
+                [3, 3],
+                [3, 9],
+                [3, 15],
+                [9, 3],
+                [9, 9],
+                [9, 15],
+                [15, 3],
+                [15, 9],
+                [15, 15]
+            ],
+            "13, 13": [
+                [3, 3],
+                [3, 6],
+                [3, 9],
+                [6, 3],
+                [6, 6],
+                [6, 9],
+                [9, 3],
+                [9, 6],
+                [9, 9]
+            ],
+            "9, 9": [
+                [2, 2],
+                [2, 6],
+                [6, 2],
+                [6, 6]
+            ]
+        }
+        var lets = [];
+        if (Object.keys(etoiles).includes("" + taille_horizontale_encours + ", " + taille_verticale_encours)) {
+            lets = etoiles["" + taille_horizontale_encours + ", " + taille_verticale_encours];
+        }
+        var plateau = document.getElementById("plateau");
+        for (y = 0; y < taille_verticale_encours; y++) {
+            var ligne = document.createElement("tr");
+            for (x = 0; x < taille_horizontale_encours; x++) {
+                var point = document.createElement("td");
+                point.setAttribute("id", "case_" + x + "_" + y);
+                point.setAttribute("onmouseenter", "enter_hover(" + x + "," + y + ")");
+                point.setAttribute("onmouseleave", "exit_hover(" + x + "," + y + ")");
+                point.setAttribute("onclick", "coup(" + x + "," + y + ")");
+                point.classList.add("case");
+                ligne.appendChild(point);
+                if (x == 0) {
+                    if (y == 0) {
+                        point.classList.add("case_coin_haut_gauche");
+                    } else if (y == taille_verticale_encours - 1) {
+                        point.classList.add("case_coin_bas_gauche");
+                    } else {
+                        point.classList.add("case_bord_gauche");
+                    }
+                } else if (y == 0) {
+                    if (x == taille_horizontale_encours - 1) {
+                        point.classList.add("case_coin_haut_droite")
+                    } else {
+                        point.classList.add("case_bord_haut");
+                    }
+                } else if (x == taille_horizontale_encours - 1) {
+                    if (y == taille_verticale_encours - 1) {
+                        point.classList.add("case_coin_bas_droite");
+                    } else {
+                        point.classList.add("case_bord_droite");
+                    }
+                } else if (y == taille_verticale_encours - 1) {
+                    point.classList.add("case_bord_bas");
+                } else {
+                    if (false) {
+                        point.classList.add("case_etoile");
+                    } else {
+                        var est_etoile = false;
+                        for ([xx, yy] of lets) {
+                            if (xx == x && yy == y) {
+                                est_etoile = true;
+                                break;
+                            }
+                        }
+                        if (est_etoile) {
+                            point.classList.add("case_etoile");
+                        } else {
+                            point.classList.add("case_interieur");
+                        }
+
+                    }
+                }
+            }
+            plateau.appendChild(ligne);
+        }
+    }
+
+    function vide_plateau() {
+        // On enleve toutes les pieces d'un plateau
+        for (piece of document.getElementsByClassName("piece")) {
+            piece.parentElement.removeChild(piece);
+        }
+    }
+
+    function nouvelle_partie() {
+        if (parseInt(document.getElementById("tx").value) == taille_horizontale_encours &&
+            parseInt(document.getElementById("ty").value) == taille_verticale_encours) {
+            vide_plateau();
+        } else {
+            cree_plateau();
+        }
+        //
+        joueur_encour = 1;
+        joueur_1 = document.getElementById("joueur_noir").value;
+        joueur_2 = document.getElementById("joueur_blanc").value;
+        captures = [0, 0];
+        coups = [];
+    }
+</script>
