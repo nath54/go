@@ -65,7 +65,6 @@
                 <h1>TODO:</h1>
                 <ul>
                     <li>Finir la partie</li>
-                    <li>Gérer les kos</li>
                     <li>Boutons pour zoomer/dézoomer sur le plateau</li>
                     <li>Bruits à chaque coup</li>
                     <li>Bots en adversaires</li>
@@ -80,6 +79,7 @@
 </html>
 
 <script>
+    var plateau_prec = null; // Le plateau du coup d'avant
     var plateau_encours = null; // la matrice des pierres
     // 0 = case vide
     // 1 = noir
@@ -93,6 +93,8 @@
     var passes = 0; // nombres de passes d'affilés
     var coups = [];
     var ko_encours = null;
+    var mode_encours = null;
+    var mortes = [];
 
     function passe() {
         passes++;
@@ -142,7 +144,7 @@
     }
 
     function fin_partie() {
-
+        mode_encours = "select_morts";
     }
 
     function enter_hover(x, y) {
@@ -287,6 +289,17 @@
         return libertes.length;
     }
 
+    function select_mort(x, y) {
+        if (plateau_encours[y][x] == 0) {
+            alert("Il n'y a pas de pierres à cet endroit !");
+            return;
+        }
+        var f = get_figure(x, y);
+        for (pier of f) {
+
+        }
+    }
+
     function coup(x, y, bot = false) {
         // On enlève tous les hovers
         for (pierre of document.getElementsByClassName("pierre_hover_noire")) {
@@ -294,6 +307,13 @@
         }
         for (pierre of document.getElementsByClassName("pierre_hover_blanche")) {
             pierre.parentElement.removeChild(pierre);
+        }
+        //
+        if (mode_encours == "select_morts") {
+            select_mort(x, y);
+        } else if (mode_encours != "partie") {
+            alert("La partie est finie !");
+            return;
         }
         // On teste si le coup est interdit à cause du ko
         if (ko_encours != null && ko_encours[0] == x && ko_encours[1] == y) {
@@ -350,6 +370,7 @@
             document.getElementById("case_" + x + "_" + y).appendChild(pierre);
 
             // c'est bon, on peut jouer
+            plateau_prec = JSON.parse(JSON.stringify(plateau_encours)) // On copie le tableau
             plateau_encours[y][x] = joueur_encour;
             passes = 0;
             var capture_coup = [];
@@ -377,8 +398,38 @@
 
             // le ko ne marche qu'avec qu'une pierre capturée
             if (capture_coup.length == 1) {
-                //TODO
+                // On va essayer de rejouer à la pierre capturée, et on va tester si il y aura un ko
+                platest = JSON.parse(JSON.stringify(plateau_encours));
+                var jj = 1;
+                if (joueur_encour == 1) {
+                    jj = 2;
+                }
+                var cc = capture_coup[0];
+                platest[cc[1]][cc[0]] = jj;
 
+                for ([dx, dy] of[[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+                    var xx = cc[0] + dx;
+                    var yy = cc[1] + dy;
+                    if (xx >= 0 && yy >= 0 && xx < taille_horizontale_encours && yy < taille_verticale_encours) {
+                        if (platest[yy][xx] == joueur_encour) {
+                            var f = get_figure(xx, yy, 0, platest);
+                            if (calcule_libertes(0, 0, f, platest) == 0) {
+                                // On capture la figure
+                                for (pier of f) {
+                                    platest[pier.y][pier.x] = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Si le plateau de test est le même que le plateau du coup précédent, alors il y aura un ko
+                if (JSON.stringify(platest) == JSON.stringify(plateau_prec)) {
+                    ko_encours = [cc[0], cc[1]];
+                } else {
+                    ko_encours = null;
+                }
+            } else {
+                ko_encours = null;
             }
 
 
@@ -532,5 +583,6 @@
         joueur_2 = document.getElementById("joueur_blanc").value;
         captures = [0, 0];
         coups = [];
+        mode_encours = "partie";
     }
 </script>
